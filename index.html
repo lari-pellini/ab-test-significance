@@ -65,9 +65,10 @@
   </main>
 
   <script type="module">
-    import { durationDays, sampleSize, zTest } from './src/abtest.js';
+    import { differenceInterval, durationDays, sampleSize, zTest } from './src/abtest.js';
 
     const pct = (x) => `${(x * 100).toFixed(2)}%`;
+    const pp = (x) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(2)}`;
     const num = (form, name) => Number(form.elements[name].value);
 
     function render(out, lines, verdict, kind) {
@@ -79,12 +80,15 @@
       const form = document.getElementById('compare');
       const out = document.getElementById('compare-out');
       try {
-        const r = zTest({
+        const counts = {
           visitorsA: num(form, 'visitorsA'), conversionsA: num(form, 'conversionsA'),
           visitorsB: num(form, 'visitorsB'), conversionsB: num(form, 'conversionsB'),
-        });
+        };
+        const r = zTest(counts);
+        const interval = differenceInterval(counts);
         render(out, [
           `A: ${pct(r.rateA)} · B: ${pct(r.rateB)} · uplift ${r.uplift === null ? 'n/a' : pct(r.uplift)}`,
+          `95% CI (B - A): ${pp(interval.lower)} to ${pp(interval.upper)} pp`,
           `p-value ${r.pValue.toFixed(4)} (confidence ${pct(r.confidence)})`,
         ], r.significant ? `Significant — variant ${r.winner} wins.` : 'Not significant yet. Keep collecting data.', r.significant ? 'good' : 'wait');
       } catch (err) {
