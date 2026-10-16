@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A/B Test Significance Calculator</title>
+  <meta name="description" content="Free, open-source A/B test calculator: check if your conversion-rate experiment is statistically significant and plan how many visitors you need.">
+  <style>
+    :root {
+      --bg: #fafaf7; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e3e2dc;
+      --accent: #7a3cff; --good: #127a3a; --wait: #9a6a00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #151514; --surface: #1f1f1d; --text: #f1f0ea; --muted: #a3a29b; --border: #33332f; --accent: #b08cff; --good: #5fd08b; --wait: #f0c25a; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 1.75rem; margin: 0 0 4px; }
+    .lede { color: var(--muted); margin: 0 0 32px; }
+    section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    h2 { font-size: 1.1rem; margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    label { display: grid; gap: 4px; font-size: .875rem; color: var(--muted); }
+    input { font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    output { display: block; margin-top: 16px; padding: 12px 14px; border-radius: 8px; background: var(--bg); font-variant-numeric: tabular-nums; }
+    .verdict { font-weight: 600; }
+    .verdict.good { color: var(--good); }
+    .verdict.wait { color: var(--wait); }
+    footer { color: var(--muted); font-size: .875rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>A/B Test Significance Calculator</h1>
+    <p class="lede">Is variant B really better, or is it just noise? Everything runs in your browser — no data leaves this page.</p>
+
+    <section aria-labelledby="compare-title">
+      <h2 id="compare-title">1. Compare results</h2>
+      <form id="compare" class="grid">
+        <label>Visitors A <input name="visitorsA" type="number" min="1" value="5000" required></label>
+        <label>Conversions A <input name="conversionsA" type="number" min="0" value="250" required></label>
+        <label>Visitors B <input name="visitorsB" type="number" min="1" value="5000" required></label>
+        <label>Conversions B <input name="conversionsB" type="number" min="0" value="310" required></label>
+      </form>
+      <output id="compare-out" for="compare" aria-live="polite"></output>
+    </section>
+
+    <section aria-labelledby="plan-title">
+      <h2 id="plan-title">2. Plan a test</h2>
+      <form id="plan" class="grid">
+        <label>Baseline conversion (%) <input name="baseline" type="number" step="0.1" min="0.1" max="99" value="5" required></label>
+        <label>Minimum lift to detect (%) <input name="mde" type="number" step="1" min="1" value="15" required></label>
+        <label>Daily visitors <input name="daily" type="number" min="1" value="2000" required></label>
+      </form>
+      <output id="plan-out" for="plan" aria-live="polite"></output>
+    </section>
+
+    <footer>
+      Two-tailed two-proportion z-test, 95% confidence, 80% power.
+      Source code on <a href="https://github.com/lari-pellini/ab-test-significance">GitHub</a> · MIT license.
+    </footer>
+  </main>
+
+  <script type="module">
+    import { durationDays, sampleSize, zTest } from './src/abtest.js';
+
+    const pct = (x) => `${(x * 100).toFixed(2)}%`;
+    const num = (form, name) => Number(form.elements[name].value);
+
+    function render(out, lines, verdict, kind) {
+      out.replaceChildren(...lines.map((text) => Object.assign(document.createElement('div'), { textContent: text })));
+      if (verdict) out.append(Object.assign(document.createElement('div'), { className: `verdict ${kind}`, textContent: verdict }));
+    }
+
+    function updateCompare() {
+      const form = document.getElementById('compare');
+      const out = document.getElementById('compare-out');
+      try {
+        const r = zTest({
+          visitorsA: num(form, 'visitorsA'), conversionsA: num(form, 'conversionsA'),
+          visitorsB: num(form, 'visitorsB'), conversionsB: num(form, 'conversionsB'),
+        });
+        render(out, [
+          `A: ${pct(r.rateA)} · B: ${pct(r.rateB)} · uplift ${r.uplift === null ? 'n/a' : pct(r.uplift)}`,
+          `p-value ${r.pValue.toFixed(4)} (confidence ${pct(r.confidence)})`,
+        ], r.significant ? `Significant — variant ${r.winner} wins.` : 'Not significant yet. Keep collecting data.', r.significant ? 'good' : 'wait');
+      } catch (err) {
+        render(out, [err.message]);
+      }
+    }
+
+    function updatePlan() {
+      const form = document.getElementById('plan');
+      const out = document.getElementById('plan-out');
+      try {
+        const perVariant = sampleSize({ baselineRate: num(form, 'baseline') / 100, minDetectableEffect: num(form, 'mde') / 100 });
+        const days = durationDays({ perVariant, dailyVisitors: num(form, 'daily') });
+        render(out, [
+          `${perVariant.toLocaleString()} visitors per variant (${(perVariant * 2).toLocaleString()} total).`,
+          `≈ ${days} days at your current traffic.`,
+        ]);
+      } catch (err) {
+        render(out, [err.message]);
+      }
+    }
+
+    document.getElementById('compare').addEventListener('input', updateCompare);
+    document.getElementById('plan').addEventListener('input', updatePlan);
+    updateCompare();
+    updatePlan();
+  </script>
+</body>
+</html>

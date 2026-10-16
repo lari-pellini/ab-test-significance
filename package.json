@@ -1,0 +1,19 @@
+{
+  "name": "ab-test-significance",
+  "version": "1.0.0",
+  "description": "Zero-dependency A/B test significance and sample size calculator (CLI + web page).",
+  "type": "module",
+  "main": "src/abtest.js",
+  "bin": {
+    "abtest": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.3"
+  },
+  "keywords": ["ab-testing", "cro", "conversion-rate-optimization", "statistics", "marketing"],
+  "author": "Larissa Pellini",
+  "license": "MIT"
+}
