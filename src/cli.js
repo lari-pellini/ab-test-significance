@@ -2,7 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { durationDays, sampleSize, zTest } from './abtest.js';
+import { differenceInterval, durationDays, sampleSize, zTest } from './abtest.js';
 
 const HELP = `ab-test-significance
 
@@ -14,6 +14,7 @@ const HELP = `ab-test-significance
 `;
 
 const pct = (x) => `${(x * 100).toFixed(2)}%`;
+const pp = (x) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(2)}`;
 
 function parseVariant(value, label) {
   const match = /^(\d+)\/(\d+)$/.exec(value ?? '');
@@ -41,10 +42,12 @@ export function run(argv) {
     const a = parseVariant(values.a, 'a');
     const b = parseVariant(values.b, 'b');
     const r = zTest({ visitorsA: a.visitors, conversionsA: a.conversions, visitorsB: b.visitors, conversionsB: b.conversions, alpha });
+    const interval = differenceInterval({ visitorsA: a.visitors, conversionsA: a.conversions, visitorsB: b.visitors, conversionsB: b.conversions, alpha });
     return [
       `A: ${pct(r.rateA)}  (${a.conversions}/${a.visitors})`,
       `B: ${pct(r.rateB)}  (${b.conversions}/${b.visitors})`,
       `Relative uplift: ${r.uplift === null ? 'n/a' : pct(r.uplift)}`,
+      `${+(interval.confidence * 100).toFixed(2)}% CI (B - A): ${pp(interval.lower)} to ${pp(interval.upper)} pp`,
       `z = ${r.z.toFixed(3)}, p-value = ${r.pValue.toFixed(4)}`,
       r.significant
         ? `✅ Significant at ${+((1 - alpha) * 100).toFixed(2)}% confidence — variant ${r.winner} wins.`

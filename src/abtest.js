@@ -34,6 +34,35 @@ function assertCounts(visitors, conversions, label) {
 }
 
 /**
+ * Newcombe interval combining independent Wilson score intervals for B - A.
+ * Bounds are proportions: multiply by 100 to display percentage points.
+ * Unlike the Wald interval, this retains uncertainty at zero or 100% conversion.
+ * @returns {{difference:number, lower:number, upper:number, confidence:number}}
+ */
+export function differenceInterval({ visitorsA, conversionsA, visitorsB, conversionsB, alpha = 0.05 }) {
+  assertCounts(visitorsA, conversionsA, 'A');
+  assertCounts(visitorsB, conversionsB, 'B');
+  if (!Number.isFinite(alpha) || alpha <= 0 || alpha >= 1) throw new RangeError('alpha must be between 0 and 1');
+  const z = -normInv(alpha / 2);
+  const wilson = (visitors, conversions) => {
+    const rate = conversions / visitors;
+    const denominator = 1 + z * z / visitors;
+    const centre = (rate + z * z / (2 * visitors)) / denominator;
+    const margin = z * Math.sqrt(rate * (1 - rate) / visitors + z * z / (4 * visitors * visitors)) / denominator;
+    return { rate, lower: Math.max(0, centre - margin), upper: Math.min(1, centre + margin) };
+  };
+  const a = wilson(visitorsA, conversionsA);
+  const b = wilson(visitorsB, conversionsB);
+  const difference = b.rate - a.rate;
+  return {
+    difference,
+    lower: Math.max(-1, difference - Math.hypot(b.rate - b.lower, a.upper - a.rate)),
+    upper: Math.min(1, difference + Math.hypot(b.upper - b.rate, a.rate - a.lower)),
+    confidence: 1 - alpha,
+  };
+}
+
+/**
  * Two-proportion z-test (pooled), two-tailed.
  * @returns {{rateA:number, rateB:number, uplift:number, z:number, pValue:number, confidence:number, significant:boolean, winner:'A'|'B'|null}}
  */
